@@ -59,7 +59,7 @@ HARIC_LOKASYONLAR = [
 
 HUKUKI_ISLEMLER = [
     "arabulucu", "arabuluculuk", "arabulculuk", "arabulcuk",
-    "duruşma", "durusma", "drusma", "durşma", "duruşm",
+    "duruşma", "durusma", "drusma", "durşma", "duruşm", "dava",
     "haciz", "hacze", "hacz", "hciz",
     "keşif", "kesif", "keşfe", "kesfe",
     "adliye", "adlye",
@@ -209,10 +209,24 @@ def mesaj_bilgilerini_cikar(element):
     }
 
 
-def mesaji_alintila(driver, actions, row_element):
+def mesaji_alintila(driver, actions, row_element, beklenen_metin):
     print("\n   [ALINTI-DEBUG] ===== ALINTILAMA BAŞLADI =====")
 
     try:
+        # Varsa açık kalan eski alıntıyı kapat
+        driver.execute_script("""
+                    var b = document.querySelector('[data-testid="quoted-message-close"]') || 
+                            document.querySelector('footer span[data-icon="x"]');
+                    if (b) {
+                        var btn = b.closest('div[role="button"]') || b.closest('button') || b;
+                        var opts = { bubbles: true, cancelable: true, view: window };
+                        btn.dispatchEvent(new MouseEvent('mousedown', opts));
+                        btn.dispatchEvent(new MouseEvent('mouseup', opts));
+                        btn.click();
+                    }
+                """)
+        time.sleep(0.25)
+
         # 1. Mesaj balonunu bul
         print("   [ALINTI-DEBUG] 1/6: Mesaj balonu aranıyor...")
 
@@ -345,12 +359,22 @@ def mesaji_alintila(driver, actions, row_element):
             )
 
         # 4. Sağ tıklama
-        print("   [ALINTI-DEBUG] 4/6: Mesaja sağ tıklanıyor...")
+        print("   [ALINTI-DEBUG] 4/6: Mesaj seçenekleri açılıyor...")
 
-        actions.move_to_element(balon).pause(0.2).context_click().perform()
+        oklar = balon.find_elements(
+            By.CSS_SELECTOR, '[data-testid="icon-down-context"]'
+        )
+
+        ok = next((e for e in oklar if e.is_displayed()), None)
+
+        if ok is None:
+            print("   [ALINTI-DEBUG] HATA: Mesaj seçenekleri oku bulunamadı.")
+            return False
+
+        driver.execute_script("arguments[0].click();", ok)
         time.sleep(0.5)
 
-        print("   [ALINTI-DEBUG] Sağ tıklama komutu tamamlandı.")
+        print("   [ALINTI-DEBUG] Mesaj seçenekleri açıldı.")
 
         # 5. Görünür menüleri tara
         print(
@@ -400,15 +424,18 @@ def mesaji_alintila(driver, actions, row_element):
                 }))
                 .filter(x => x.text)
                 .slice(-30);
-
-            const hedef = items.find(el => {
+                
+            const acikMenu = Array.from(document.querySelectorAll('[role="menu"]')).filter(visible).pop();
+            
+            const hedef = acikMenu ? Array.from(acikMenu.querySelectorAll('[role="menuitem"]')).find(el => {
                 const t = norm(el.innerText || el.textContent || '');
 
                 return t === 'yanıtla' ||
                        t === 'reply' ||
                        t === 'cevapla' ||
                        t === 'yanıt ver';
-            });
+                })
+                : null;
 
             return {
                 menuCount: document.querySelectorAll(
@@ -454,13 +481,18 @@ def mesaji_alintila(driver, actions, row_element):
                 "   [ALINTI-DEBUG] ===== ALINTILAMA BAŞARISIZ =====\n"
             )
             return False
-
         # 6. Yanıtla seçeneğine tıkla
         print(
             "   [ALINTI-DEBUG] 6/6: Yanıtla seçeneğine tıklanıyor..."
         )
 
-        actions.move_to_element(yanitla).pause(0.1).click().perform()
+        driver.execute_script("""
+                    const el = arguments[0];
+                    const opts = { bubbles: true, cancelable: true, view: window };
+                    el.dispatchEvent(new MouseEvent('mousedown', opts));
+                    el.dispatchEvent(new MouseEvent('mouseup', opts));
+                    el.click();
+                """, yanitla)
         time.sleep(0.5)
 
         print(
@@ -475,10 +507,10 @@ def mesaji_alintila(driver, actions, row_element):
                 '[data-testid="quoted-message-preview"]'
             ];
 
-            for (const selector of selectors) {
-                const el = document.querySelector(selector);
+            const gorunurOgeler = [];
 
-                if (el) {
+            for (const selector of selectors) {
+                for (const el of document.querySelectorAll(selector)) {
                     const r = el.getBoundingClientRect();
                     const s = getComputedStyle(el);
 
@@ -488,14 +520,29 @@ def mesaji_alintila(driver, actions, row_element):
                         s.display !== 'none' &&
                         s.visibility !== 'hidden'
                     ) {
-                        return {
-                            found: true,
+                        gorunurOgeler.push({
+                            el: el,
                             selector: selector,
-                            text: (el.innerText || '')
-                                .trim().slice(0, 120)
-                        };
+                            top: r.top,
+                            text: (el.innerText || el.textContent || '')
+                                .trim()
+                        });
                     }
                 }
+            }
+
+            // Ekranda en aşağıda bulunan görünür alıntı
+            // genellikle yazma kutusundaki aktif yanıt önizlemesidir.
+            gorunurOgeler.sort((a, b) => b.top - a.top);
+
+            if (gorunurOgeler.length > 0) {
+                const aktif = gorunurOgeler[0];
+
+                return {
+                    found: true,
+                    selector: aktif.selector,
+                    text: aktif.text.slice(0, 500)
+                };
             }
 
             return {found: false};
@@ -505,7 +552,36 @@ def mesaji_alintila(driver, actions, row_element):
             f"   [ALINTI-DEBUG] Yanıt önizleme kontrolü: "
             f"{yanit_kutusu}"
         )
+        if not yanit_kutusu["found"]:
+            print("   [ALINTI-DEBUG] Alıntı önizlemesi bulunamadı.")
+            return False
 
+        alinti_metni = turkce_kucuk(yanit_kutusu.get("text", ""))
+        beklenen = turkce_kucuk(beklenen_metin)
+
+        # Önizlemede mesajın gövdesinin bulunmasını doğrula.
+        if beklenen not in alinti_metni:
+            print("   [ALINTI-DEBUG] HATA: Yanlış mesaj alıntılandı!")
+            print(f"   [ALINTI-DEBUG] Beklenen: {beklenen!r}")
+            print(f"   [ALINTI-DEBUG] Alıntı:   {alinti_metni!r}")
+            print("   [ALINTI-DEBUG] Güvenlik için alıntı iptal ediliyor.")
+
+            try:
+                driver.execute_script("""
+                    const el = document.querySelector(
+                        '[data-testid="quoted-message-close"]'
+                    );
+                    if (el) {
+                        const btn = el.closest(
+                            '[role="button"], button'
+                        ) || el;
+                        btn.click();
+                    }
+                """)
+            except WebDriverException:
+                pass
+
+            return False
         print(
             "   [ALINTI-DEBUG] ===== ALINTILAMA TAMAMLANDI =====\n"
         )
@@ -695,12 +771,21 @@ def bot_baslat():
                         print("   --> ŞARTLAR SAĞLANDI! Mesaj alıntılanıyor...")
                         time.sleep(random.uniform(0.2, 0.3))
 
-                        alintilandi = mesaji_alintila(driver, actions, oge)
-                        if alintilandi:
-                            print("   --> [BAŞARILI] Mesaj alıntılandı.")
-                        else:
-                            print("   --> [BİLGİ] Alıntılama açılamadı, düz mesaj iletiliyor...")
+                        alintilandi = mesaji_alintila(
+                            driver,
+                            actions,
+                            oge,
+                            govde
+                        )
+                        if not alintilandi:
+                            print(
+                                "   --> [GÜVENLİK] Doğru mesaj alıntılanamadı. "
+                                "Yanıt gönderilmedi."
+                            )
+                            time.sleep(1.0)
+                            break
 
+                        print("   --> [BAŞARILI] Doğru mesaj alıntılandı.")
                         try:
                             mesaj_gonder(driver, YANIT_MESAJI)
                             print(f"   --> [+] YANIT GÖNDERİLDİ: '{YANIT_MESAJI}'\n")
