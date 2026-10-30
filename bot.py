@@ -37,6 +37,8 @@ os.makedirs(SOHBET_LOG_DIZINI, exist_ok=True)
 SYSTEM_LOG_DOSYASI = os.path.join(LOG_DIZINI, "system.log")
 SELENIUM_LOG_DOSYASI = os.path.join(LOG_DIZINI, "selenium.log")
 
+DEBUG_ALINTI_LOG_DOSYASI = os.path.join(LOG_DIZINI, "debug_alinti.log")
+
 LOG_FORMATI = logging.Formatter(
     "%(asctime)s | %(levelname)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
@@ -81,6 +83,12 @@ selenium_logger = logger_olustur(
     logging.DEBUG
 )
 
+alinti_debug_logger = logger_olustur(
+    "whatsapp_bot.alinti_debug",
+    DEBUG_ALINTI_LOG_DOSYASI,
+    logging.DEBUG
+)
+
 # Selenium kütüphanesinin loglarını mevcut Selenium logger'ına yönlendir.
 selenium_kutuphane_logger = logging.getLogger("selenium")
 selenium_kutuphane_logger.setLevel(logging.WARNING)
@@ -122,11 +130,15 @@ print(f"[LOG] Selenium: {SELENIUM_LOG_DOSYASI}")
 
 
 
-YANIT_MESAJI = "ben yardımcı olabilirim"
+YANIT_MESAJI = os.environ.get("YANIT_MESAJI", "ben yardımcı olabilirim")
 
-DEBUG_MODU = False       # True ise: Kendi mesajlarına da yanıt verir (Test modu)
-                        # False ise: Canlı mod, kendi giden mesajlarını otomatik eler
-OTOMATIK_GONDER = True  # Simülasyon: False ise Hiçbir şekilde mesaj atmaz, alıntı yapmaz sadece loglama yapar test için
+DEBUG_MODU = os.environ.get("DEBUG_MODU", "False") == "True"            # True ise: Kendi mesajlarına da yanıt verir (Test modu)
+                                                                        # False ise: Canlı mod, kendi giden mesajlarını otomatik eler
+OTOMATIK_GONDER = os.environ.get("OTOMATIK_GONDER", "False") == "True"  # Simülasyon: False ise Hiçbir şekilde mesaj atmaz, alıntı yapmaz sadece loglama yapar test için
+
+print(
+    f"[AYAR] Debug Modu: {DEBUG_MODU} | Otomatik Gönderim: {OTOMATIK_GONDER}| Yanıt Mesajı: '{YANIT_MESAJI}'"
+)
 
 # Debug modundaysak kendi mesajlarımızı işle, canlı moddaysak yok say
 KENDI_MESAJLARIMI_ISLE = True if DEBUG_MODU else False
@@ -554,15 +566,15 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
         time.sleep(0.25)
 
         # 1. Mesaj balonunu bul
-        print("   [ALINTI-DEBUG] 1/6: Mesaj balonu aranıyor...")
+        alinti_log_ve_terminal("1/6: Mesaj balonu aranıyor...")
 
         balonlar = row_element.find_elements(
             By.CSS_SELECTOR, '[data-testid="msg-container"]'
         )
 
-        print(
-            f"   [ALINTI-DEBUG] Bulunan balon: {len(balonlar)}"
-        )
+        # Kalabalık detay - Sadece log dosyasına gider, terminali kirletmez
+        alinti_sadece_log(f"Bulunan balon sayısı: {len(balonlar)}")
+
         alinti_logla(
             "ALINTI_BALONU_ARANDI",
             bulunan_balon_sayisi=len(balonlar)
@@ -572,17 +584,11 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
             (e for e in balonlar if e.is_displayed()),
             None
         )
-
         if balon is None:
-            print(
-                "   [ALINTI-DEBUG] msg-container bulunamadı; "
-                "row_element kullanılacak."
-            )
+            alinti_sadece_log("msg-container bulunamadı; row_element kullanılacak.")
             balon = row_element
         else:
-            print(
-                "   [ALINTI-DEBUG] Görünür mesaj balonu bulundu."
-            )
+            alinti_sadece_log("Görünür mesaj balonu bulundu.")
 
         # Seçilen balon her iki durumda da loglanır.
         alinti_logla(
@@ -595,16 +601,8 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
 
         # Balonun temel bilgileri
         try:
-            print(
-                f"   [ALINTI-DEBUG] Etiket: {balon.tag_name} | "
-                f"Test ID: {balon.get_attribute('data-testid')} | "
-                f"Görünür: {balon.is_displayed()}"
-            )
-
-            print(
-                f"   [ALINTI-DEBUG] Balon metni: "
-                f"{(balon.text or '')[:180]!r}"
-            )
+            alinti_sadece_log(f"Etiket: {balon.tag_name} | Test ID: {balon.get_attribute('data-testid')} | Görünür: {balon.is_displayed()}")
+            alinti_sadece_log(f"Balon metni: {(balon.text or '')[:180]!r}")
 
             konum = driver.execute_script("""
                 const r = arguments[0].getBoundingClientRect();
@@ -616,7 +614,7 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
                 };
             """, balon)
 
-            print(f"   [ALINTI-DEBUG] Balon konumu: {konum}")
+            alinti_sadece_log(f"Balon konumu: {konum}")
 
         except StaleElementReferenceException as hata:
             selenium_hata_logla(
@@ -633,14 +631,11 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
                 hata=str(hata)
             )
 
-            print(
-                "   [ALINTI-DEBUG] Balon bilgileri alınırken "
-                "element DOM'dan kaldırıldı."
-            )
+            alinti_sadece_log("Balon bilgileri alınırken element DOM'dan kaldırıldı.")
             return False
 
         # 2. Balonu görünür alana getir
-        print("   [ALINTI-DEBUG] 2/6: Balon ekranda ortalanıyor...")
+        alinti_log_ve_terminal("2/6: Balon ekranda ortalanıyor...")
 
         driver.execute_script(
             "arguments[0].scrollIntoView({block:'center'});",
@@ -648,21 +643,18 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
         )
         time.sleep(0.3)
 
-        print("   [ALINTI-DEBUG] Kaydırma tamamlandı.")
+        alinti_sadece_log("Kaydırma tamamlandı.")
 
         # 3. Fareyi balonun üzerine getir
-        print("   [ALINTI-DEBUG] 3/6: Fare balona götürülüyor...")
+        alinti_log_ve_terminal("3/6: Fare balona götürülüyor...")
 
         actions.move_to_element(balon).pause(0.5).perform()
         time.sleep(0.3)
 
-        print("   [ALINTI-DEBUG] Fare hareketi tamamlandı.")
+        alinti_sadece_log("Fare hareketi tamamlandı.")
 
         # Hover sonrasında görünen mesaj kontrollerini incele
-        print(
-            "   [ALINTI-DEBUG] Hover sonrası mesaj kontrolleri "
-            "inceleniyor..."
-        )
+        alinti_sadece_log("Hover sonrası mesaj kontrolleri inceleniyor...")
 
         kontroller = driver.execute_script("""
             const el = arguments[0];
@@ -699,20 +691,15 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
             .slice(0, 25);
         """, balon)
 
+        # Kontrol detaylarını terminale basmak yerine sadece log dosyasına atıyoruz
         if kontroller:
-            for i, kontrol in enumerate(kontroller, 1):
-                print(
-                    f"   [ALINTI-DEBUG] Kontrol {i}: "
-                    f"{kontrol}"
-                )
+            alinti_sadece_log(kontroller)
         else:
-            print(
-                "   [ALINTI-DEBUG] Hover sonrası görünür "
-                "kontrol bulunamadı."
-            )
+            alinti_sadece_log("Hover sonrası görünür kontrol bulunamadı.")
+
 
         # 4. Seçenekler menüsünü aç (Plan A: Ok Simgesi -> Plan B: Sağ Tık)
-        print("   [ALINTI-DEBUG] 4/6: Mesaj seçenekleri açılıyor...")
+        alinti_log_ve_terminal("4/6: Mesaj seçenekleri açılıyor...")
 
         if (
                 beklenen_sohbet_anahtari is None
@@ -731,11 +718,11 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
         ok = next((e for e in oklar if e.is_displayed()), None)
 
         if ok is not None:
-            print("   [ALINTI-DEBUG] Plan A: Ok simgesi bulundu, tıklanıyor...")
+            alinti_sadece_log("Plan A: Ok simgesi bulundu, tıklanıyor...")
             driver.execute_script("arguments[0].click();", ok)
         else:
             # Plan B: Ok bulunamadı, sağ tık yedeği devreye giriyor
-            print("   [ALINTI-DEBUG] Plan B: Ok bulunamadı, balona sağ tık yapılıyor...")
+            alinti_log_ve_terminal("Plan A: Ok bulunamadı, sağ tık yedeği kullanılıyor.")
             alinti_logla(
                 "ALINTI_OKU_BULUNAMADI_SAG_TIK_DENENIYOR",
                 neden="Ok ikonu DOM'da bulunamadığı için sağ tık yedeği kullanıldı."
@@ -748,19 +735,14 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
                     asama="sag_tik_yedegi",
                     hata=str(e)
                 )
-                print(f"   [ALINTI-DEBUG] HATA: Sağ tık başarısız oldu: {e}")
-                return False
 
         time.sleep(0.5)
-        print("   [ALINTI-DEBUG] Menü tetiklendi.")
+        alinti_sadece_log("Menü tetiklendi.")
         alinti_logla("MESAJ_SECENEKLERI_ACILDI")
 
 
         # 5. Görünür menüleri tara
-        print(
-            "   [ALINTI-DEBUG] 5/6: Görünür menü seçenekleri "
-            "aranıyor..."
-        )
+        alinti_log_ve_terminal("5/6: Görünür menü seçenekleri aranıyor...")
 
         sonuc = driver.execute_script("""
             function visible(el) {
@@ -827,39 +809,12 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
             };
         """)
 
-        print(
-            f"   [ALINTI-DEBUG] Görünür menü sayısı: "
-            f"{sonuc['menuCount']}"
-        )
-        print(
-            f"   [ALINTI-DEBUG] Taranan görünür öğe sayısı: "
-            f"{sonuc['itemCount']}"
-        )
-
-        if sonuc["menuTexts"]:
-            for i, oge in enumerate(sonuc["menuTexts"], 1):
-                print(
-                    f"   [ALINTI-DEBUG] Menü öğesi {i}: "
-                    f"{oge}"
-                )
-        else:
-            print(
-                "   [ALINTI-DEBUG] DOM'da görünür menü metni yok."
-            )
+        alinti_sadece_log(sonuc)
 
         yanitla = sonuc["hedef"]
 
         if yanitla is None:
-            print(
-                "   [ALINTI-DEBUG] SONUÇ: Yanıtla bulunamadı."
-            )
-            print(
-                "   [ALINTI-DEBUG] Sağ tıklama WhatsApp "
-                "menüsünü açmamış olabilir."
-            )
-            print(
-                "   [ALINTI-DEBUG] ===== ALINTILAMA BAŞARISIZ =====\n"
-            )
+            alinti_log_ve_terminal("SONUÇ: Yanıtla menüde bulunamadı.")
             alinti_logla(
                 "ALINTILAMA_HATASI",
                 asama="yanitla_secimi",
@@ -867,9 +822,7 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
             )
             return False
         # 6. Yanıtla seçeneğine tıkla
-        print(
-            "   [ALINTI-DEBUG] 6/6: Yanıtla seçeneğine tıklanıyor..."
-        )
+        alinti_log_ve_terminal("6/6: Yanıtla seçeneğine tıklanıyor...")
 
         driver.execute_script("""
                     const el = arguments[0];
@@ -879,10 +832,6 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
                     el.click();
                 """, yanitla)
         time.sleep(0.5)
-
-        print(
-            "   [ALINTI-DEBUG] Tıklama komutu tamamlandı."
-        )
 
         # Yanıt kutusunun açılıp açılmadığını kontrol et
         yanit_kutusu = driver.execute_script("""
@@ -933,10 +882,7 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
             return {found: false};
         """)
 
-        print(
-            f"   [ALINTI-DEBUG] Yanıt önizleme kontrolü: "
-            f"{yanit_kutusu}"
-        )
+        alinti_sadece_log(yanit_kutusu)
         alinti_logla(
             "YANIT_ONIZLEME_KONTROLU",
             bulundu=yanit_kutusu.get("found", False),
@@ -944,7 +890,7 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
             onizleme_metni=yanit_kutusu.get("text", "")[:500]
         )
         if not yanit_kutusu["found"]:
-            print("   [ALINTI-DEBUG] Alıntı önizlemesi bulunamadı.")
+            alinti_log_ve_terminal("Alıntı önizlemesi bulunamadı.")
             alinti_logla(
                 "ALINTILAMA_HATASI",
                 asama="onizleme_dogrulama",
@@ -957,17 +903,13 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
 
         # Önizlemede mesajın gövdesinin bulunmasını doğrula.
         if beklenen not in alinti_metni:
-            print("   [ALINTI-DEBUG] HATA: Yanlış mesaj alıntılandı!")
-            print(f"   [ALINTI-DEBUG] Beklenen: {beklenen!r}")
-            print(f"   [ALINTI-DEBUG] Alıntı:   {alinti_metni!r}")
-            print("   [ALINTI-DEBUG] Güvenlik için alıntı iptal ediliyor.")
+            alinti_log_ve_terminal("HATA: Yanlış mesaj alıntılandı, iptal ediliyor.")
             alinti_logla(
                 "ALINTILAMA_HATASI",
                 asama="yanlis_mesaj_kontrolu",
                 beklenen=beklenen,
                 bulunan=alinti_metni
             )
-
             try:
                 driver.execute_script("""
                     const el = document.querySelector(
@@ -982,12 +924,9 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
                 """)
             except WebDriverException:
                 pass
-
             return False
-        print(
-            "   [ALINTI-DEBUG] ===== ALINTILAMA TAMAMLANDI =====\n"
-        )
 
+        alinti_log_ve_terminal("===== ALINTILAMA TAMAMLANDI =====")
         alinti_logla(
             "ALINTILAMA_BASARILI",
             dogrulandi=True,
@@ -1031,13 +970,7 @@ def mesaji_alintila(driver, actions, row_element, beklenen_metin, sohbet_adi=Non
             hata_turu=type(hata).__name__,
             hata_mesaji=str(hata)
         )
-        print(
-            f"   [ALINTI-DEBUG] BEKLENMEYEN HATA: "
-            f"{type(hata).__name__}: {hata}"
-        )
-        print(
-            "   [ALINTI-DEBUG] ===== ALINTILAMA HATALI =====\n"
-        )
+        alinti_sadece_log(f"Beklenmeyen hata: {type(hata).__name__}: {hata}")
         return False
 
 def giden_mesaj_eslesme_sayisi(driver, metin):
@@ -1132,24 +1065,6 @@ def giden_mesaj_eslesme_sayisi(driver, metin):
                     hata=sonuc.get("hata"),
                     aranan_metin=metin
                 )
-            print(
-                "[DOM-TEŞHİS] Seçici sayıları:",
-                sonuc.get("sayilar", {})
-            )
-            print(
-                "[DOM-TEŞHİS] Mesaj adayı:",
-                sonuc.get("aday_sayisi", 0)
-            )
-            print(
-                "[DOM-TEŞHİS] Eşleşme:",
-                sonuc.get("eslesen_sayi", 0)
-            )
-
-            if sonuc.get("hata"):
-                print("[DOM-TEŞHİS] Hata:", sonuc["hata"])
-
-            for aday in sonuc.get("adaylar", []):
-                print("[DOM-ADAY]", aday)
 
         return int(sonuc.get("eslesen_sayi", 0))
 
@@ -1615,6 +1530,42 @@ def sohbet_logla(sohbet_adi, olay, **alanlar):
             hata_turu=type(hata).__name__,
             hata_mesaji=str(hata)
         )
+
+def alinti_log_ve_terminal(mesaj):
+    """Hem terminale hem de debug_alinti.log dosyasına yazar (Genel adımlar için)."""
+    tarih_saat = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted_msg = f"   [ALINTI] {mesaj}"
+    print(formatted_msg)  # Terminale basar
+    try:
+        with open(DEBUG_ALINTI_LOG_DOSYASI, "a", encoding="utf-8") as f:
+            f.write(f"{tarih_saat} | {mesaj}\n")  # Loga yazar
+    except Exception:
+        pass
+
+def alinti_sadece_log(mesaj):
+    """Sadece debug_alinti.log dosyasına yazar, terminale ASLA basmaz (DOM adayları ve kalabalık detaylar için)."""
+    tarih_saat = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with open(DEBUG_ALINTI_LOG_DOSYASI, "a", encoding="utf-8") as f:
+            f.write(f"{tarih_saat} | [DETAY] {json.dumps(mesaj, ensure_ascii=False, default=str)}\n")
+    except Exception:
+        pass
+
+
+def alinti_debug_yaz(mesaj):
+    """Log dosyasına her türlü yazar; terminale ise sadece DEBUG_MODU True ise basar."""
+    tarih_saat = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 1. Her durumda harici log dosyasına kaydet
+    try:
+        with open(DEBUG_ALINTI_LOG_DOSYASI, "a", encoding="utf-8") as f:
+            f.write(f"{tarih_saat} | {mesaj}\n")
+    except Exception:
+        pass
+
+    # 2. Terminale sadece Debug modu açiksa bastır (İstersen if kontrolünü kaldırıp her türlü terminale de bastırabilirsin)
+    if DEBUG_MODU:
+        print(f"   [ALINTI-DEBUG] {mesaj}")
 
 
 def bot_baslat():
