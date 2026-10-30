@@ -7,3 +7,7 @@ whatsapp_session/
 .env
 .idea/
 whatsapp_bot_session/
+chrome_profile/
+selenium_profile/
+logs/
+*.log
