@@ -149,32 +149,66 @@ ALINTI_MAKSIMUM_DENEME = 3
 KONTROL_ARALIGI = 0.5
 HAFIZA_BOYUTU = 1000
 
+CONFIG_DOSYASI = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "config.json")
+
 # ==================================================
-# KELİME FİLTRELERİ
+# KELİME FİLTRELESİ
 # ==================================================
 
-SAMSUN_LOKASYONLARI = [
-    "samsun", "smsun", "samusn", "samsn",
-    "ilkadım", "ilkadim", "ilkadm", "ılkadm",
-    "atakum", "atalum", "atkum", "atakm",
-    "canik", "cank", "canık",
-    "çarşamba", "carsamba", "carsmaba", "çarşamb", "carsamb",
-    "bafra", "bafta", "bafr",
-    "tekkeköy", "tekkekoy", "tekkeky", "tekeköy", "tekekoy",
-    "kavak", "ondokuzmayıs", "ondokuzmayis", "19 mayıs", "19 mayis",
-]
+def config_oku():
+    """Arayüzden (gui.py) kaydedilen config.json dosyasını okur."""
+    varsayilanlar = {
+        "samsun_lokasyonlari": [
+            "samsun", "smsun", "samusn", "samsn", "ilkadım", "ilkadim", "ilkadm", "ılkadm",
+            "atakum", "atalum", "atkum", "atakm", "canik", "cank", "canık",
+            "çarşamba", "carsamba", "carsmaba", "çarşamb", "carsamb", "bafra", "bafta", "bafr",
+            "tekkeköy", "tekkekoy", "tekkeky", "tekeköy", "tekekoy", "kavak", "ondokuzmayıs",
+            "ondokuzmayis", "19 mayıs", "19 mayis", "omü", "omu"
+        ],
+        "haric_lokasyonlar": [
+            "alaçam", "alacam", "alacm", "alaçm", "ladik", "ladk", "vezirköprü", "vezirkopru",
+            "havza", "terme", "asarcık", "asarcik", "ayvacık", "ayvacik", "salıpazarı", "salipazari", "yakakent"
+        ],
+        "hukuki_islemler": [
+            "arabulucu", "arabuluculuk", "duruşma", "durusma", "dava", "haciz", "hacze", "hacz",
+            "keşif", "kesif", "adliye", "adlye", "mahkeme", "icra", "icr", "hukuk", "ceza",
+            "sulh", "asliye", "tevkil", "tvkil", "yetki belgesi", "yetki", "vekalet", "dosya",
+            "kalem", "fotokopi", "masraf", "müzekkere", "muzekkere", "savcılık", "savcilik",
+            "ifade", "tapu", "vergi dairesi", "belediye", "ön büro", "önbüro", "müvekkil",
+            "muvekkil", "savcı", "savci", "görüşme", "gorusme", "evrak", "teminat mektubu", "bam"
+        ],
+        "talep_ifadeleri": [
+            "var mı", "var mi", "varmı", "varmi", "varm", "varmıdır", "var mıdır",
+            "gidebilecek", "gidicek", "gidecek", "katılabilecek", "katilabilecek", "katılacak",
+            "bakabilecek", "bakacak", "yapabilecek", "yapacak", "alabilecek", "alacak",
+            "yardımcı olabilecek", "yardımcı olabilir misiniz", "yardımcı olacak",
+            "kim var", "kimse var mı", "ariyorum", "ariyoruz", "arıyorum", "arıyoruz",
+            "ihtiyac", "ihtiyaç", "ihtiyacımız", "ihtiyaçımız", "lazım", "lazim",
+            "rica etsem", "bulabilir miyiz", "arayışımız var"
+        ],
+        "genel_meslektas_arama": [
+            "avukat", "meslektaş", "meslektas", "mslektas", "mslektaş", "avukt", "avkat", "meslektaş var"
+        ]
+    }
 
-HARIC_LOKASYONLAR = [
-    "alaçam", "alacam", "alacm", "alaçm",
-    "ladik", "ladk",
-    "vezirköprü", "vezirkopru",
-    "havza",
-    "terme",
-    "asarcık", "asarcik",
-    "ayvacık", "ayvacik",
-    "salıpazarı", "salipazari",
-    "yakakent",
-]
+    if os.path.exists(CONFIG_DOSYASI):
+        try:
+            with open(CONFIG_DOSYASI, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return varsayilanlar
+
+# Dinamik listeleri config'den çekiyoruz
+_cfg = config_oku()
+
+SAMSUN_LOKASYONLARI = _cfg.get("samsun_lokasyonlari", [])
+HARIC_LOKASYONLAR = _cfg.get("haric_lokasyonlar", [])
+HUKUKI_ISLEMLER = _cfg.get("hukuki_islemler", [])
+TALEP_IFADELERI = _cfg.get("talep_ifadeleri", [])
+GENEL_MESLEKTAS_ARAMA = _cfg.get("genel_meslektas_arama", [])
 
 TURKIYE_ILLERI = [
     "adana", "adıyaman", "afyonkarahisar", "ağrı", "aksaray", "amasya", "ankara", "antalya", "ardahan","artvin", "aydın", "balıkesir",
@@ -184,61 +218,6 @@ TURKIYE_ILLERI = [
     "kırıkkale", "kırklareli", "kırşehir","kilis", "kocaeli", "konya", "kütahya", "malatya", "manisa", "mardin", "mersin",
     "muğla", "muş", "nevşehir", "niğde", "ordu", "osmaniye", "rize", "sakarya", "samsun","siirt", "sinop", "sivas", "şanlıurfa",
     "şırnak", "tekirdağ", "tokat", "trabzon", "tunceli", "uşak", "van", "yalova", "yozgat", "zonguldak",
-]
-
-HUKUKI_ISLEMLER = [
-    "arabulucu", "arabuluculuk", "arabulculuk", "arabulcuk",
-    "duruşma", "durusma", "drusma", "durşma", "duruşm", "dava",
-    "haciz", "hacze", "hacz", "hciz",
-    "keşif", "kesif", "keşfe", "kesfe",
-    "adliye", "adlye",
-    "mahkeme", "mhkeme",
-    "icra", "icr",
-    "hukuk", "ceza", "hkuk",
-    "sulh", "suşh", "sluh",
-    "asliye", "aslye", "aslıye",
-    "ağır ceza", "agir ceza", "iş mahkemesi", "is mahkemesi",
-    "tüketici", "tuketici", "aile",
-    "tevkil", "tvkil",
-    "yetki belgesi", "yetki", "ytki", "vekalet",
-    "dosya", "dsya",
-    "kalem", "fotokopi", "masraf", "sorgulama", "sorgu",
-    "müzekkere", "muzekkere", "savcılık", "savcilik", "ifade",
-    "tapu", "tpu", "vergi dairesi", "belediye", "mehil", "tehir",
-    "tehiri icra", "tehir-i", "tehir-i icra","ön büro", "önbüro",
-    "on buro", "onburo", "cezaevi", "ceza evi", "müvekkil", "muvekkıl", "muvekkil",
-    "savcı", "savci", "savcilik", "savcılık", "görüş", "gorus", "görüşme", "gorusme",
-    "muzekkere", "müzekkere", "evrak", "evrk", "müzekere", "muzekere", "kapak", "hesap", "hesabı",
-    "hesabi", "teminat mektubu", "teminat mektupu", "temınat mektupu", "temınat mektubu", "taşınmaz",
-    "tasinmaz", "konkordato", "konkordota", "konkordoto", "konkordto", "konkordta", "alacaklı", "alacaklılar",
-    "alacakli", "alacaklilar", "ifade", "toplanti", "toplantı",
-]
-
-TALEP_IFADELERI = [
-    "var mı", "var mi", "varmı", "varmi", "varm", "varmıdır", "var mıdır",
-    "var midir", "varmidir", "varmdr", "var mıdr", "var midr", "varmidr", "varmıdr",
-    "gidebilecek", "gidicek", "gidecek", "gidebilcek", "gidck",
-    "katılabilecek", "katilabilecek", "katılacak", "katilicak", "katilacak", "katilabilcek", "katilabilck", "katılabilck",
-    "bakabilecek", "bakıcak", "bakacak", "bakabilcek",
-    "yapabilecek", "yapacak", "yapıcak", "yapabilcek",
-    "alabilecek", "alıcak", "alacak", "alabilcek",
-    "sorgulayabilecek", "sorgulayacak", "sorgulayabilcek",
-    "yardımcı olabilecek", "yardimci olabilecek", "yardımcı olabilir misiniz",
-    "yardimci olabilir misiniz", "yardımcı olacak", "yardimci olacak",
-    "yardımcı", "yardimci",
-    "kim var", "kimse var mı", "kimse var mi", "kimse varmı", "avukatlik",
-    "ariyorum", "ariyoruz", "arıyorum", "arıyoruz", "arıyorux", "ariyorux",
-    "ihtiyac", "ihtiyaç", "ıhtıyac", "ıhtıyaç", "ihtiyacımız", "ihtiyaçımız", "ıhtıyacımız", "ıhtıyaçımız",
-    "görüşecek", "gorusecek", "görüşebilecek", "gorusebilecek", "gorusebilck", "görüşebilck",
-    "lazım", "lazim", "rica etsem", "rıca etsem", "rica ederim", "rıca ederm", "rıca ederım", "rıca ederim",
-    "yardım rica", "yardim rica", "yardım rıca", "bulabilir miyiz", "bulabılırmıyız", "bulabilirmiyiz", "bulabılır mıyız",
-    "arayışımız var", "arayisimiz var", "arayşmz var", "araysmz var",
-]
-
-GENEL_MESLEKTAS_ARAMA = [
-    "avukat", "meslektaş", "meslektas", "mslektas", "mslektaş",
-    "avukt", "avkat",
-    "meslektaş var", "meslektas var",
 ]
 
 # ==================================================
